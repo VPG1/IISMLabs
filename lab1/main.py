@@ -1,7 +1,8 @@
 import time
 
 from lab1.generators.simple_generator import SimpleGenerator
-from lab1.generators.complex_generator import  ComplexGenerator
+from lab1.generators.complex_generator import ComplexGenerator
+from lab1.generators.complex_dependent_generator import ComplexDependentGenerator
 
 a = SimpleGenerator(time.time(), 0.5)
 
@@ -25,3 +26,13 @@ for _ in range(0, 10**6):
 
 
 print([success / 10**6 for success in successes])
+
+
+c = ComplexDependentGenerator(time.time(), 0.6, 0.7)
+print(c.probabilities(0.6, 0.7))
+
+events = [0, 0, 0, 0]
+for _ in range(0, 10**6):
+    events[c.random()] += 1
+
+print([el / 10**6 for el in events])
