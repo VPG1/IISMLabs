@@ -7,7 +7,6 @@ class FullGroupGenerator(random.Random):
             raise ValueError("Sum of probabilities must be 1")
         super().__init__(seed)
         self.dist_function = [sum(probability_list[1:i + 1]) for i in range(len(probability_list))]
-        # self.probability_list = probability_list
 
     def random(self) -> int:
         rand_num = super().random()
