@@ -60,8 +60,7 @@ def pop_event():
 
 
 win = tk.Tk()
-
-tk.Label(win, text='2.Имитация сложного случаного события').grid(row=0, column=0)
+win.title('2.Имитация сложного случаного события')
 
 tk.Button(win, text='+', command=push_event).grid(row=0, column=1)
 tk.Button(win, text='-', command=pop_event).grid(row=0, column=2)

@@ -27,8 +27,7 @@ def handler():
 
 
 win = tk.Tk()
-
-tk.Label(win, text='1.Имитация простого случаного события').grid(row=0, column=0)
+win.title('1.Имитация простого случаного события')
 tk.Label(win, text='Введите вероятность:').grid(row=1, column=0)
 entry = tk.Entry(win)
 entry.grid(row=1, column=1)
