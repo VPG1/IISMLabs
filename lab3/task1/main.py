@@ -1,17 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.stats import norm, sem, chi2, t
+import tkinter as tk
+from tkinter import messagebox
+from scipy import stats
 
 
-# Определим функцию совместной плотности вероятности f(x, y)
+# Определяем совместную плотность вероятности f(x, y)
 def f_xy(x, y):
     return 0.5 * np.cos(x - y)
 
-def g_xy(x, y):
-    return 0.5
 
-# Маргинальная плотность f_X(x) = 0.5 * (sin(x) + cos(x))
+# Маргинальная плотность
 def marginal_density_x(x):
     return 0.5 * (np.sin(x) + np.cos(x))
 
@@ -20,8 +20,7 @@ def marginal_density_y(y):
     return 0.5 * (np.sin(y) + np.cos(y))
 
 
-
-
+# Метод отклонений для генерации двумерной случайной величины
 def generate_sample(n_samples=10000):
     samples_x = []
     samples_y = []
@@ -33,7 +32,7 @@ def generate_sample(n_samples=10000):
             y_candidate = np.random.uniform(0, np.pi / 2)
 
             # Генерируем случайное число u для метода отклонений
-            u = np.random.uniform(0, 1)  # Максимальное значение плотности f(x, y) = 0.5
+            u = np.random.uniform(0, 0.5)  # Максимальное значение плотности f(x, y) = 0.5
 
             # Проверяем условие метода отклонений
             if u <= f_xy(x_candidate, y_candidate):
@@ -43,74 +42,63 @@ def generate_sample(n_samples=10000):
 
     return np.array(samples_x), np.array(samples_y)
 
-# Условная плотность f_{X|Y}(x|y)
-def conditional_density_x_given_y(x, y):
-    return f_xy(x, y) / marginal_density_y(y)
-
-
-# Условная плотность f_{Y|X}(y|x)
-def conditional_density_y_given_x(y, x):
-    return f_xy(x, y) / marginal_density_x(x)
-
-
-# Функция для вычисления корреляции между X и Y
-def compute_correlation(x_samples, y_samples):
-    # Вычисляем корреляцию Пирсона
-    correlation_matrix = np.corrcoef(x_samples, y_samples)
-    correlation = correlation_matrix[0, 1]  # Извлекаем корреляцию из матрицы
-    return correlation
-
 
 # Функция для вычисления теоретических характеристик
 def theoretical_characteristics():
-    # Математическое ожидание
-    E_X = np.pi / 4
-    E_Y = np.pi / 4
+    mean_x = np.pi / 4
+    mean_y = np.pi / 4
+    var_x = var_y = 1 / 12  # Дисперсия равномерного распределения на [0, pi/2]
 
-    # Дисперсия
-    Var_X = (np.pi ** 2) / 48  # Теоретическая дисперсия
-    Var_Y = (np.pi ** 2) / 48  # Теоретическая дисперсия
+    # Для расчета ковариации
+    covariance = np.var([mean_x, mean_y]) * (1 / 4)  # Предполагаем, что зависимость линейная
 
-    return E_X, E_Y, Var_X, Var_Y
+    # Стандартные отклонения
+    std_x = np.sqrt(var_x)
+    std_y = np.sqrt(var_y)
 
+    # Корреляция
+    correlation = covariance / (std_x * std_y)
 
-# Функция для вычисления доверительного интервала для дисперсии
-def confidence_interval_variance(data, confidence_level):
-    n = len(data)
-    sample_var = np.var(data, ddof=1)  # Выборочная дисперсия
-    alpha = 1 - confidence_level
-
-    # Критические значения для распределения Хи-квадрат
-    chi2_lower = chi2.ppf(1 - alpha / 2, n - 1)
-    chi2_upper = chi2.ppf(alpha / 2, n - 1)
-
-    # Доверительный интервал для дисперсии
-    ci_lower = (n - 1) * sample_var / chi2_lower
-    ci_upper = (n - 1) * sample_var / chi2_upper
-
-    return ci_lower, ci_upper
+    return (mean_x, mean_y), (var_x, var_y), correlation
 
 
-# Функция для проверки гипотезы о математическом ожидании
-def hypothesis_test_mean(sample_mean, theoretical_mean, sample_std, n, alpha=0.05):
-    t_stat = (sample_mean - theoretical_mean) / (sample_std / np.sqrt(n))
-    critical_value = t.ppf(1 - alpha / 2, df=n - 1)
-    return abs(t_stat) < critical_value
+# Функция для вычисления эмпирических характеристик
+def empirical_characteristics(x_samples, y_samples):
+    mean_x = np.mean(x_samples)
+    mean_y = np.mean(y_samples)
+    var_x = np.var(x_samples, ddof=1)  # Используем ddof=1 для выборочной дисперсии
+    var_y = np.var(y_samples, ddof=1)
+    correlation = np.corrcoef(x_samples, y_samples)[0, 1]
+
+    return (mean_x, mean_y), (var_x, var_y), correlation
 
 
-# Функция для проверки гипотезы о дисперсии
-def hypothesis_test_variance(sample_var, theoretical_var, n, alpha=0.05):
-    chi2_stat = (n - 1) * sample_var / theoretical_var
-    chi2_lower = chi2.ppf(alpha / 2, n - 1)
-    chi2_upper = chi2.ppf(1 - alpha / 2, n - 1)
-    return chi2_lower < chi2_stat < chi2_upper
+# Функция для проверки статистических гипотез
+def hypothesis_testing(empirical_values, theoretical_values):
+    # Проверяем соответствие математического ожидания
+    mu_x_diff = np.abs(empirical_values[0][0] - theoretical_values[0][0])
+    mu_y_diff = np.abs(empirical_values[0][1] - theoretical_values[0][1])
+
+    # Проверяем соответствие дисперсии
+    var_x_diff = np.abs(empirical_values[1][0] - theoretical_values[1][0])
+    var_y_diff = np.abs(empirical_values[1][1] - theoretical_values[1][1])
+
+    # Проверяем соответствие корреляции
+    correlation_diff = np.abs(empirical_values[2] - theoretical_values[2])
+
+    return mu_x_diff < 0.1, mu_y_diff < 0.1, var_x_diff < 0.01, var_y_diff < 0.01, correlation_diff < 0.1
 
 
-# Функция для проверки гипотезы о корреляции
-def hypothesis_test_correlation(correlation, n, alpha=0.05):
-    t_stat = correlation * np.sqrt((n - 2) / (1 - correlation ** 2))
-    critical_value = t.ppf(1 - alpha / 2, df=n - 2)
-    return abs(t_stat) < critical_value
+# Функция для проверки независимости
+def independence_test(x_samples, y_samples, alpha=0.05):
+    # Создаем двумерную гистограмму
+    hist, xedges, yedges = np.histogram2d(x_samples, y_samples, bins=30)
+
+    # Выполняем критерий хи-квадрат
+    chi2_stat, p_value, _, _ = stats.chi2_contingency(hist)
+
+    # Проверка гипотезы о независимости
+    return p_value > alpha, chi2_stat, p_value
 
 
 # Функция для построения 3D-графика распределения
@@ -141,7 +129,7 @@ def plot_3d_distribution(x_samples, y_samples):
     X, Y = np.meshgrid(x_vals, y_vals)
     Z = f_xy(X, Y)
 
-    # Построение графика плотности без rstride и cstride
+    # Построение графика плотности
     ax.plot_surface(X, Y, Z, alpha=0.8, color='orange', edgecolor='none')
 
     # Настройка меток
@@ -183,86 +171,95 @@ def plot_conditional_densities(x_samples, y_samples):
     plt.subplot(1, 2, 1)
     plt.hist(x_conditional_samples, bins=50, density=True, alpha=0.6, color='blue',
              label=f'Гистограмма X|Y={fixed_y:.2f}')
-    plt.plot(x_vals, conditional_density_x_given_y(x_vals, fixed_y), label=f'Плотность X|Y={fixed_y:.2f}',
-             color='darkblue', linewidth=2)
-    plt.title(f'Условная плотность X при Y={fixed_y:.2f}')
-    plt.xlabel('Значение X')
+    plt.plot(x_vals, conditional_density_x_given_y(x_vals, fixed_y), label='Условная плотность', color='red')
+    plt.xlabel('X')
     plt.ylabel('Плотность')
+    plt.title(f'Условная плотность X|Y={fixed_y:.2f}')
     plt.legend()
-    plt.grid(True)
 
     # Гистограмма и условная плотность для Y|X
     plt.subplot(1, 2, 2)
     plt.hist(y_conditional_samples, bins=50, density=True, alpha=0.6, color='green',
              label=f'Гистограмма Y|X={fixed_x:.2f}')
-    plt.plot(y_vals, conditional_density_y_given_x(y_vals, fixed_x), label=f'Плотность Y|X={fixed_x:.2f}',
-             color='darkgreen', linewidth=2)
-    plt.title(f'Условная плотность Y при X={fixed_x:.2f}')
-    plt.xlabel('Значение Y')
+    plt.plot(y_vals, conditional_density_y_given_x(y_vals, fixed_x), label='Условная плотность', color='orange')
+    plt.xlabel('Y')
     plt.ylabel('Плотность')
+    plt.title(f'Условная плотность Y|X={fixed_x:.2f}')
     plt.legend()
-    plt.grid(True)
 
     plt.tight_layout()
     plt.show()
 
 
-# Основная программа
-if __name__ == "__main__":
-    # Генерация 10000 случайных величин
-    x_samples, y_samples = generate_sample(100000)
+# Условная плотность X|Y
+def conditional_density_x_given_y(x, y):
+    return f_xy(x, y) / marginal_density_y(y)
 
-    # Вычисление корреляции
-    correlation = compute_correlation(x_samples, y_samples)
 
-    # Вычисление теоретических характеристик
-    E_X, E_Y, Var_X, Var_Y = theoretical_characteristics()
+# Условная плотность Y|X
+def conditional_density_y_given_x(y, x):
+    return f_xy(x, y) / marginal_density_x(x)
 
-    # Вычисление выборочных характеристик
-    sample_mean_x = np.mean(x_samples)
-    sample_mean_y = np.mean(y_samples)
-    sample_var_x = np.var(x_samples, ddof=1)
-    sample_var_y = np.var(y_samples, ddof=1)
 
-    # Доверительные интервалы для математических ожиданий
-    confidence_level = 0.95
-    z_score = norm.ppf((1 + confidence_level) / 2)
-    margin_error_x = z_score * sem(x_samples)
-    margin_error_y = z_score * sem(y_samples)
+# Функция для обработки нажатия кнопки "Сгенерировать"
+def on_generate():
+    try:
+        n_samples = int(entry_samples.get())
+        x_samples, y_samples = generate_sample(n_samples)
 
-    ci_x = (E_X - margin_error_x, E_X + margin_error_x)
-    ci_y = (E_Y - margin_error_y, E_Y + margin_error_y)
+        # Вычисление теоретических и эмпирических характеристик
+        theoretical_vals = theoretical_characteristics()
+        empirical_vals = empirical_characteristics(x_samples, y_samples)
 
-    # Доверительные интервалы для дисперсии
-    ci_var_x = confidence_interval_variance(x_samples, confidence_level)
-    ci_var_y = confidence_interval_variance(y_samples, confidence_level)
+        # Проверка гипотез
+        independence_hypothesis, chi2_stat, p_value = independence_test(x_samples, y_samples)
+        mu_x_hypothesis, mu_y_hypothesis, var_x_hypothesis, var_y_hypothesis, corr_hypothesis = hypothesis_testing(
+            empirical_vals, theoretical_vals)
 
-    # Проверка гипотез
-    n = len(x_samples)
-    mean_test_x = hypothesis_test_mean(sample_mean_x, E_X, np.std(x_samples, ddof=1), n)
-    mean_test_y = hypothesis_test_mean(sample_mean_y, E_Y, np.std(y_samples, ddof=1), n)
-    var_test_x = hypothesis_test_variance(sample_var_x, Var_X, n)
-    var_test_y = hypothesis_test_variance(sample_var_y, Var_Y, n)
-    corr_test = hypothesis_test_correlation(correlation, n)
+        # Создаем сообщение с результатами
+        result_message = (
+            f"Корреляция: {empirical_vals[2]:.4f}\n"
+            f"Теоретические значения:\n"
+            f"Математическое ожидание X: {theoretical_vals[0][0]:.4f}, Y: {theoretical_vals[0][1]:.4f}\n"
+            f"Дисперсия X: {theoretical_vals[1][0]:.4f}, Y: {theoretical_vals[1][1]:.4f}\n"
+            f"Эмпирические значения:\n"
+            f"Математическое ожидание X: {empirical_vals[0][0]:.4f}, Y: {empirical_vals[0][1]:.4f}\n"
+            f"Дисперсия X: {empirical_vals[1][0]:.4f}, Y: {empirical_vals[1][1]:.4f}\n"
+            f"Результаты проверки гипотез:\n"
+            f"Гипотеза о математическом ожидании X: {'Не отклоняем' if mu_x_hypothesis else 'Отклоняем'}\n"
+            f"Гипотеза о математическом ожидании Y: {'Не отклоняем' if mu_y_hypothesis else 'Отклоняем'}\n"
+            f"Гипотеза о дисперсии X: {'Не отклоняем' if var_x_hypothesis else 'Отклоняем'}\n"
+            f"Гипотеза о дисперсии Y: {'Не отклоняем' if var_y_hypothesis else 'Отклоняем'}\n"
+            f"Гипотеза о корреляции: {'Не отклоняем' if corr_hypothesis else 'Отклоняем'}\n"
+            f"Статистика хи-квадрат: {chi2_stat:.4f}\n"
+            f"P-значение: {p_value:.4f}\n"
+        )
 
-    # Вывод результатов
-    print(f"Корреляция между X и Y: {correlation:.4f}")
-    print(f"Теоретическое ожидание E(X): {E_X:.4f}, E(Y): {E_Y:.4f}")
-    print(f"Теоретическая дисперсия Var(X): {Var_X:.4f}, Var(Y): {Var_Y:.4f}")
-    print(f"Выборочное ожидание X: {sample_mean_x:.4f}, Y: {sample_mean_y:.4f}")
-    print(f"Выборочная дисперсия X: {sample_var_x:.4f}, Y: {sample_var_y:.4f}")
-    print(f"95% доверительный интервал для E(X): {ci_x}, E(Y): {ci_y}")
-    print(f"95% доверительный интервал для Var(X): {ci_var_x}, Var(Y): {ci_var_y}")
+        messagebox.showinfo("Результаты", result_message)
 
-    # Результаты проверки гипотез
-    print(f"Гипотеза о математическом ожидании X: {'Принята' if mean_test_x else 'Отклонена'}")
-    print(f"Гипотеза о математическом ожидании Y: {'Принята' if mean_test_y else 'Отклонена'}")
-    print(f"Гипотеза о дисперсии X: {'Принята' if var_test_x else 'Отклонена'}")
-    print(f"Гипотеза о дисперсии Y: {'Принята' if var_test_y else 'Отклонена'}")
-    print(f"Гипотеза о корреляции: {'Принята' if corr_test else 'Отклонена'}")
+        # Построение 3D-графика
+        plot_3d_distribution(x_samples, y_samples)
 
-    # Построение 3D-графика
-    plot_3d_distribution(x_samples, y_samples)
+        # Построение гистограмм и графиков условных плотностей
+        plot_conditional_densities(x_samples, y_samples)
 
-    # Построение условных плотностей
-    plot_conditional_densities(x_samples, y_samples)
+    except ValueError as e:
+        messagebox.showerror("Ошибка", str(e))
+
+
+# Создаем главное окно
+root = tk.Tk()
+root.title("Генерация двумерной НСВ")
+
+# Создаем интерфейс
+label_samples = tk.Label(root, text="Введите количество выборок:")
+label_samples.pack()
+
+entry_samples = tk.Entry(root)
+entry_samples.pack()
+
+button_generate = tk.Button(root, text="Сгенерировать", command=on_generate)
+button_generate.pack()
+
+# Запускаем главный цикл
+root.mainloop()
