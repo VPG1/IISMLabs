@@ -1,12 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.stats import norm, sem, chi2, t
 
 
 # Определим функцию совместной плотности вероятности f(x, y)
 def f_xy(x, y):
     return 0.5 * np.cos(x - y)
 
+def g_xy(x, y):
+    return 0.5
 
 # Маргинальная плотность f_X(x) = 0.5 * (sin(x) + cos(x))
 def marginal_density_x(x):
@@ -17,7 +20,8 @@ def marginal_density_y(y):
     return 0.5 * (np.sin(y) + np.cos(y))
 
 
-# Метод отклонений для генерации двумерной случайной величины
+
+
 def generate_sample(n_samples=10000):
     samples_x = []
     samples_y = []
@@ -29,7 +33,7 @@ def generate_sample(n_samples=10000):
             y_candidate = np.random.uniform(0, np.pi / 2)
 
             # Генерируем случайное число u для метода отклонений
-            u = np.random.uniform(0, 0.5)  # Максимальное значение плотности f(x, y) = 0.5
+            u = np.random.uniform(0, 1)  # Максимальное значение плотности f(x, y) = 0.5
 
             # Проверяем условие метода отклонений
             if u <= f_xy(x_candidate, y_candidate):
@@ -38,7 +42,6 @@ def generate_sample(n_samples=10000):
                 break
 
     return np.array(samples_x), np.array(samples_y)
-
 
 # Условная плотность f_{X|Y}(x|y)
 def conditional_density_x_given_y(x, y):
@@ -56,6 +59,58 @@ def compute_correlation(x_samples, y_samples):
     correlation_matrix = np.corrcoef(x_samples, y_samples)
     correlation = correlation_matrix[0, 1]  # Извлекаем корреляцию из матрицы
     return correlation
+
+
+# Функция для вычисления теоретических характеристик
+def theoretical_characteristics():
+    # Математическое ожидание
+    E_X = np.pi / 4
+    E_Y = np.pi / 4
+
+    # Дисперсия
+    Var_X = (np.pi ** 2) / 48  # Теоретическая дисперсия
+    Var_Y = (np.pi ** 2) / 48  # Теоретическая дисперсия
+
+    return E_X, E_Y, Var_X, Var_Y
+
+
+# Функция для вычисления доверительного интервала для дисперсии
+def confidence_interval_variance(data, confidence_level):
+    n = len(data)
+    sample_var = np.var(data, ddof=1)  # Выборочная дисперсия
+    alpha = 1 - confidence_level
+
+    # Критические значения для распределения Хи-квадрат
+    chi2_lower = chi2.ppf(1 - alpha / 2, n - 1)
+    chi2_upper = chi2.ppf(alpha / 2, n - 1)
+
+    # Доверительный интервал для дисперсии
+    ci_lower = (n - 1) * sample_var / chi2_lower
+    ci_upper = (n - 1) * sample_var / chi2_upper
+
+    return ci_lower, ci_upper
+
+
+# Функция для проверки гипотезы о математическом ожидании
+def hypothesis_test_mean(sample_mean, theoretical_mean, sample_std, n, alpha=0.05):
+    t_stat = (sample_mean - theoretical_mean) / (sample_std / np.sqrt(n))
+    critical_value = t.ppf(1 - alpha / 2, df=n - 1)
+    return abs(t_stat) < critical_value
+
+
+# Функция для проверки гипотезы о дисперсии
+def hypothesis_test_variance(sample_var, theoretical_var, n, alpha=0.05):
+    chi2_stat = (n - 1) * sample_var / theoretical_var
+    chi2_lower = chi2.ppf(alpha / 2, n - 1)
+    chi2_upper = chi2.ppf(1 - alpha / 2, n - 1)
+    return chi2_lower < chi2_stat < chi2_upper
+
+
+# Функция для проверки гипотезы о корреляции
+def hypothesis_test_correlation(correlation, n, alpha=0.05):
+    t_stat = correlation * np.sqrt((n - 2) / (1 - correlation ** 2))
+    critical_value = t.ppf(1 - alpha / 2, df=n - 2)
+    return abs(t_stat) < critical_value
 
 
 # Функция для построения 3D-графика распределения
@@ -84,9 +139,9 @@ def plot_3d_distribution(x_samples, y_samples):
     x_vals = np.linspace(0, np.pi / 2, 100)
     y_vals = np.linspace(0, np.pi / 2, 100)
     X, Y = np.meshgrid(x_vals, y_vals)
-    Z = f_xy(X, Y) + 0.1
+    Z = f_xy(X, Y)
 
-    # Построение графика плотности
+    # Построение графика плотности без rstride и cstride
     ax.plot_surface(X, Y, Z, alpha=0.8, color='orange', edgecolor='none')
 
     # Настройка меток
@@ -155,12 +210,56 @@ def plot_conditional_densities(x_samples, y_samples):
 # Основная программа
 if __name__ == "__main__":
     # Генерация 10000 случайных величин
-    x_samples, y_samples = generate_sample(1000000)
+    x_samples, y_samples = generate_sample(100000)
 
     # Вычисление корреляции
     correlation = compute_correlation(x_samples, y_samples)
 
+    # Вычисление теоретических характеристик
+    E_X, E_Y, Var_X, Var_Y = theoretical_characteristics()
+
+    # Вычисление выборочных характеристик
+    sample_mean_x = np.mean(x_samples)
+    sample_mean_y = np.mean(y_samples)
+    sample_var_x = np.var(x_samples, ddof=1)
+    sample_var_y = np.var(y_samples, ddof=1)
+
+    # Доверительные интервалы для математических ожиданий
+    confidence_level = 0.95
+    z_score = norm.ppf((1 + confidence_level) / 2)
+    margin_error_x = z_score * sem(x_samples)
+    margin_error_y = z_score * sem(y_samples)
+
+    ci_x = (E_X - margin_error_x, E_X + margin_error_x)
+    ci_y = (E_Y - margin_error_y, E_Y + margin_error_y)
+
+    # Доверительные интервалы для дисперсии
+    ci_var_x = confidence_interval_variance(x_samples, confidence_level)
+    ci_var_y = confidence_interval_variance(y_samples, confidence_level)
+
+    # Проверка гипотез
+    n = len(x_samples)
+    mean_test_x = hypothesis_test_mean(sample_mean_x, E_X, np.std(x_samples, ddof=1), n)
+    mean_test_y = hypothesis_test_mean(sample_mean_y, E_Y, np.std(y_samples, ddof=1), n)
+    var_test_x = hypothesis_test_variance(sample_var_x, Var_X, n)
+    var_test_y = hypothesis_test_variance(sample_var_y, Var_Y, n)
+    corr_test = hypothesis_test_correlation(correlation, n)
+
+    # Вывод результатов
     print(f"Корреляция между X и Y: {correlation:.4f}")
+    print(f"Теоретическое ожидание E(X): {E_X:.4f}, E(Y): {E_Y:.4f}")
+    print(f"Теоретическая дисперсия Var(X): {Var_X:.4f}, Var(Y): {Var_Y:.4f}")
+    print(f"Выборочное ожидание X: {sample_mean_x:.4f}, Y: {sample_mean_y:.4f}")
+    print(f"Выборочная дисперсия X: {sample_var_x:.4f}, Y: {sample_var_y:.4f}")
+    print(f"95% доверительный интервал для E(X): {ci_x}, E(Y): {ci_y}")
+    print(f"95% доверительный интервал для Var(X): {ci_var_x}, Var(Y): {ci_var_y}")
+
+    # Результаты проверки гипотез
+    print(f"Гипотеза о математическом ожидании X: {'Принята' if mean_test_x else 'Отклонена'}")
+    print(f"Гипотеза о математическом ожидании Y: {'Принята' if mean_test_y else 'Отклонена'}")
+    print(f"Гипотеза о дисперсии X: {'Принята' if var_test_x else 'Отклонена'}")
+    print(f"Гипотеза о дисперсии Y: {'Принята' if var_test_y else 'Отклонена'}")
+    print(f"Гипотеза о корреляции: {'Принята' if corr_test else 'Отклонена'}")
 
     # Построение 3D-графика
     plot_3d_distribution(x_samples, y_samples)
