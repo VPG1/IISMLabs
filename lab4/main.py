@@ -3,84 +3,91 @@ import tkinter as tk
 from tkinter import messagebox
 
 
-def calculate_smo_parameters(lambda_rate, mu_rate, nu_rate):
-    # Находим P0
-    denominator = 1 + (lambda_rate / nu_rate) + (lambda_rate ** 2) / (mu_rate ** 2 * (1 - (lambda_rate / mu_rate)))
-    P0 = 1 / denominator
-
-    # Находим P1, P2, ... Pn
-    P = [P0]
-    n = 1
-    while True:
-        if n == 1:
-            Pn = (lambda_rate / nu_rate) * P0
-        else:
-            Pn = (lambda_rate / mu_rate) * P[n - 1]
-
-        if Pn < 1e-6:
-            break
-
-        P.append(Pn)
-        n += 1
-
-    # Подсчет средних характеристик
-    L_s = sum(n * P[n] for n in range(len(P)))  # Среднее число заявок в системе
-    L_q = sum((n - 1) * P[n] for n in range(2, len(P)))  # Среднее число заявок в очереди
-
-    W_s = L_s / lambda_rate  # Среднее время пребывания заявки в системе
-    W_q = L_q / lambda_rate  # Среднее время ожидания заявки в очереди
-
-    return {
-        "P": P,
-        "L_s": L_s,
-        "L_q": L_q,
-        "W_s": W_s,
-        "W_q": W_q,
-    }
-
-
-def on_calculate():
+# Функция для вычисления характеристик СМО
+def calculate():
     try:
-        lambda_rate = float(entry_lambda.get())
-        mu_rate = float(entry_mu.get())
-        nu_rate = float(entry_nu.get())
+        lambda_rate = float(entry_lambda.get())  # Интенсивность потока заявок
+        mu = float(entry_mu.get())  # Интенсивность обслуживания на фазе
+        k = int(entry_k.get())  # Число фаз обслуживания
 
-        results = calculate_smo_parameters(lambda_rate, mu_rate, nu_rate)
+        mu_k = k * mu  # Интенсивность обслуживания по закону Эрланга
 
-        # Вывод результатов
-        result_text = "Вероятности состояний:\n"
-        for n, Pn in enumerate(results["P"]):
-            result_text += f"P({n}) = {Pn:.4f}\n"
-        result_text += f"\nСреднее число заявок в системе (L_s) = {results['L_s']:.4f}\n"
-        result_text += f"Среднее число заявок в очереди (L_q) = {results['L_q']:.4f}\n"
-        result_text += f"Среднее время пребывания заявки в системе (W_s) = {results['W_s']:.4f}\n"
-        result_text += f"Среднее время ожидания заявки в очереди (W_q) = {results['W_q']:.4f}\n"
+        # Составляем систему уравнений для стационарных вероятностей
+        A = np.array([
+            [1, 1, 1, 1],  # Условие нормировки
+            [lambda_rate, -mu_k, 0, 0],  # Уравнение для состояния p_0
+            [0, lambda_rate, -mu_k, 0],  # Уравнение для состояния p_1
+            [0, 0, lambda_rate, -mu_k]  # Уравнение для состояния p_2
+        ])
 
-        messagebox.showinfo("Результаты", result_text)
-    except ValueError:
-        messagebox.showerror("Ошибка ввода", "Пожалуйста, введите корректные числовые значения.")
+        b = np.array([1, 0, 0, 0])  # Вектор правой части (условие нормировки + стационарные уравнения)
+
+        # Решаем систему уравнений
+        p = np.linalg.solve(A, b)
+
+        # Вероятности состояний
+        p0, p1, p2, p3 = p
+
+        # 1. Коэффициент занятости системы
+        rho = p1 + p2 + p3
+
+        # 2. Среднее число заявок в системе
+        L_s = p1 + 2 * p2 + 3 * p3
+
+        # 3. Среднее число заявок в очереди
+        L_q = p2 + 2 * p3
+
+        # 4. Среднее время пребывания заявки в системе (по формуле Литтла)
+        W_s = L_s / (lambda_rate * (1 - p3))
+
+        # 5. Среднее время ожидания заявки в очереди
+        W_q = L_q / (lambda_rate * (1 - p3))
+
+        # 6. Вероятность отказа
+        P_otkaz = p3
+
+        # Выводим результаты в графический интерфейс
+        result_text = f"Вероятности состояний:\np_0 = {p0:.4f}\np_1 = {p1:.4f}\np_2 = {p2:.4f}\np_3 = {p3:.4f}\n\n" \
+                      f"Коэффициент занятости (ρ): {rho:.4f}\n" \
+                      f"Среднее число заявок в системе (L_s): {L_s:.4f}\n" \
+                      f"Среднее число заявок в очереди (L_q): {L_q:.4f}\n" \
+                      f"Среднее время пребывания в системе (W_s): {W_s:.4f}\n" \
+                      f"Среднее время ожидания в очереди (W_q): {W_q:.4f}\n" \
+                      f"Вероятность отказа (P_отказ): {P_otkaz:.4f}"
+
+        label_result.config(text=result_text)
+
+    except Exception as e:
+        messagebox.showerror("Ошибка", f"Неверный ввод данных: {str(e)}")
 
 
-# Создание основного окна
+# Создаем графический интерфейс с помощью Tkinter
 root = tk.Tk()
-root.title("Система массового обслуживания")
+root.title("Одноканальная СМО с ограниченной очередью")
 
-# Создание полей ввода
-tk.Label(root, text="Интенсивность потока (λ):").grid(row=0, column=0, padx=10, pady=10)
+# Метки и поля для ввода параметров
+label_lambda = tk.Label(root, text="Интенсивность потока (λ):")
+label_lambda.grid(row=0, column=0)
 entry_lambda = tk.Entry(root)
-entry_lambda.grid(row=0, column=1, padx=10, pady=10)
+entry_lambda.grid(row=0, column=1)
 
-tk.Label(root, text="Параметр обслуживания (μ):").grid(row=1, column=0, padx=10, pady=10)
+label_mu = tk.Label(root, text="Интенсивность обслуживания (μ):")
+label_mu.grid(row=1, column=0)
 entry_mu = tk.Entry(root)
-entry_mu.grid(row=1, column=1, padx=10, pady=10)
+entry_mu.grid(row=1, column=1)
 
-tk.Label(root, text="Параметр разогрева (ν):").grid(row=2, column=0, padx=10, pady=10)
-entry_nu = tk.Entry(root)
-entry_nu.grid(row=2, column=1, padx=10, pady=10)
+label_k = tk.Label(root, text="Число фаз обслуживания (k):")
+label_k.grid(row=2, column=0)
+entry_k = tk.Entry(root)
+entry_k.grid(row=2, column=1)
 
 # Кнопка для расчета
-button_calculate = tk.Button(root, text="Рассчитать", command=on_calculate)
-button_calculate.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+button_calculate = tk.Button(root, text="Рассчитать", command=calculate)
+button_calculate.grid(row=3, column=0, columnspan=2)
 
-# Запуск основного цикла
+# Поле для вывода результата
+label_result = tk.Label(root, text="", justify="left")
+label_result.grid(row=4, column=0, columnspan=2)
+
+# Запуск основного цикла программы
 root.mainloop()
